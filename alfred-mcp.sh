@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# AlfredMCP public bootstrap — delegates to the private installer via gh auth.
+# AlfredMCP public bootstrap (v4) — delegates to the private installer via gh auth.
 # Minimal on purpose. Source: https://github.com/alfred-fleet/install
 
 (  # subshell: partial download = unclosed paren = parse error = nothing runs
@@ -12,37 +12,50 @@ trap 'rm -rf "$STAGE"' EXIT
 B="\033[1m"; G="\033[32m"; Y="\033[33m"; R="\033[31m"; N="\033[0m"
 [[ -t 1 ]] || { B=""; G=""; Y=""; R=""; N=""; }
 
-printf '%b\n' "${B}AlfredMCP bootstrap${N}"
+printf '%b\n' "${B}AlfredMCP bootstrap (v4)${N}"
 echo ""
 
-# --- preflight ---
+# --- Preflight (v4 client-side needs: gh, jq, curl, tailscale) ---
 OS="$(uname -s)"
 [[ "$OS" == "Darwin" ]] || { printf '%bERROR:%b macOS-only in v1 (detected: %s)\n' "$R" "$N" "$OS" >&2; exit 1; }
 
 missing=()
-for cmd in gh bun jq sqlite3 zstd; do
+for cmd in gh jq curl tailscale; do
   command -v "$cmd" >/dev/null || missing+=("$cmd")
 done
 if (( ${#missing[@]} > 0 )); then
   printf '%bMissing:%b %s\n\n' "$R" "$N" "${missing[*]}" >&2
-  echo "Install with Homebrew (if missing):" >&2
+  echo "Install with Homebrew (macOS):" >&2
   for c in "${missing[@]}"; do
     case "$c" in
-      bun) echo "  curl -fsSL https://bun.sh/install | bash" >&2 ;;
-      *)   echo "  brew install $c" >&2 ;;
+      tailscale) echo "  brew install --cask tailscale" >&2 ;;
+      *)         echo "  brew install $c" >&2 ;;
     esac
   done
+  exit 1
+fi
+
+# --- Tailscale must be running ---
+if ! tailscale status >/dev/null 2>&1; then
+  cat >&2 <<'TS'
+Tailscale is installed but not running / not authenticated.
+
+  1. Open the Tailscale app (or run: open /Applications/Tailscale.app)
+  2. Sign in with your @voxeteach.com Google account
+  3. Tell Ian the device name so he can approve it + apply the tag:alfred-mcp-consumer
+  4. Re-run this installer once Ian confirms
+TS
   exit 1
 fi
 
 # --- gh auth ---
 if ! gh auth status >/dev/null 2>&1; then
   cat >&2 <<'AUTH'
-You're not logged in to GitHub. Set up a fine-grained PAT scoped to this repo:
+You're not logged in to GitHub. Set up a fine-grained PAT scoped to the client repo:
 
    1. https://github.com/settings/personal-access-tokens/new
-        Token name:      alfred-mcp-consumer
-        Resource owner:  alfred-fleet
+        Token name:       alfred-mcp-consumer
+        Resource owner:   alfred-fleet
         Repository access: Only select → alfred-mcp-client
         Permissions:
           Contents:  Read-only
@@ -72,9 +85,9 @@ if ! gh api "repos/$REPO" >/dev/null 2>&1; then
   exit 1
 fi
 
-printf '%b✓%b GitHub auth confirmed\n' "$G" "$N"
+printf '%b✓%b Tailscale up, GitHub auth confirmed\n' "$G" "$N"
 
-# --- clone private repo + hand off ---
+# --- Clone private repo + hand off ---
 printf '%b→%b fetching %s...\n' "$B" "$N" "$REPO"
 GH_TOKEN="$(gh auth token)"
 git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$STAGE/client" >/dev/null 2>&1 \
