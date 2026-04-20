@@ -6,6 +6,10 @@
 set -euo pipefail
 
 REPO="alfred-fleet/alfred-mcp-client"
+# Pin the private client repo to a specific audited commit.
+# Rotate via PR to alfred-fleet/install; then update SOP-teammate-connect.md's
+# pinned-installer URL + SHA-256 in the palace in lockstep.
+CLIENT_PINNED_SHA="a2cf3c3326e6aefe5a6f3ff8ef121fafe7873513"
 STAGE="$(mktemp -d -t alfred-mcp-bootstrap.XXXXXXXX)"
 trap 'rm -rf "$STAGE"' EXIT
 
@@ -87,12 +91,19 @@ fi
 
 printf '%b✓%b Tailscale up, GitHub auth confirmed\n' "$G" "$N"
 
-# --- Clone private repo + hand off ---
-printf '%b→%b fetching %s...\n' "$B" "$N" "$REPO"
+# --- Clone private repo + checkout pinned SHA + hand off ---
+printf '%b→%b fetching %s at pinned SHA %s...\n' "$B" "$N" "$REPO" "${CLIENT_PINNED_SHA:0:12}"
 GH_TOKEN="$(gh auth token)"
-git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$STAGE/client" >/dev/null 2>&1 \
+git clone "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$STAGE/client" >/dev/null 2>&1 \
   || { printf '%bERROR:%b clone failed (check your PAT scopes)\n' "$R" "$N" >&2; exit 1; }
 
+# Integrity pin: check out the audited commit, not whatever main happens to be.
+# If this SHA no longer exists in the remote (force-push, repo rewrite), we refuse.
+git -C "$STAGE/client" checkout --detach "$CLIENT_PINNED_SHA" >/dev/null 2>&1 \
+  || { printf '%bERROR:%b pinned SHA %s not present in %s (force-push?)\n' \
+       "$R" "$N" "$CLIENT_PINNED_SHA" "$REPO" >&2; exit 1; }
+
+printf '%b✓%b client repo verified at pinned SHA\n' "$G" "$N"
 printf '%b→%b running installer...\n\n' "$B" "$N"
 exec bash "$STAGE/client/install.sh"
 )
