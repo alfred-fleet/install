@@ -9,7 +9,7 @@ REPO="alfred-fleet/alfred-mcp-client"
 # Pin the private client repo to a specific audited commit.
 # Rotate via PR to alfred-fleet/install; then update SOP-teammate-connect.md's
 # pinned-installer URL + SHA-256 in the palace in lockstep.
-CLIENT_PINNED_SHA="832c5308f7b97efed272d6b3c9939f3823f5c6f4"
+CLIENT_PINNED_SHA="d1cc359b04b9d0d229d84b70f4b949f386833d43"
 STAGE="$(mktemp -d -t alfred-mcp-bootstrap.XXXXXXXX)"
 trap 'rm -rf "$STAGE"' EXIT
 
